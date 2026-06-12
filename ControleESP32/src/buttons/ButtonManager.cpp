@@ -42,18 +42,18 @@ void ButtonManager::updateMask() {
   buttonMask = 0;
 
   if (button1.isPressed()) {
-    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::BUTTON_1);
+    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::ACTION_1);
   }
 
   if (button2.isPressed()) {
-    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::BUTTON_2);
+    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::ACTION_2);
   }
 
   if (button3.isPressed()) {
-    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::BUTTON_3);
+    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::ACTION_3);
   }
 
   if (button4.isPressed()) {
-    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::BUTTON_4);
+    buttonMask |= 1U << static_cast<uint8_t>(GamepadButton::ACTION_4);
   }
 }

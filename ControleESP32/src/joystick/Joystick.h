@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include "ControllerTypes.h"
+#include "../model/ControllerTypes.h"
 
 /**
  * Representa um joystick analógico de dois eixos.

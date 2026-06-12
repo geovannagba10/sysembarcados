@@ -7,10 +7,10 @@
  * Cada botão corresponde a um bit do relatório enviado ao computador.
  */
 enum class GamepadButton : uint8_t {
-  BUTTON_1 = 0,
-  BUTTON_2 = 1,
-  BUTTON_3 = 2,
-  BUTTON_4 = 3
+  ACTION_1 = 0,
+  ACTION_2 = 1,
+  ACTION_3 = 2,
+  ACTION_4 = 3
 };
 
 /**

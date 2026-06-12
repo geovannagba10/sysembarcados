@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#include "GamepadController.h"
+#include "src/controller/GamepadController.h"
 
 constexpr bool ENABLE_SERIAL_DEBUG = true;
 constexpr uint16_t DEBUG_PERIOD_MS = 250;
@@ -10,37 +10,25 @@ GamepadController controller;
 void setup() {
   Serial.begin(115200);
 
+  delay(1000);
+
+  Serial.println();
+  Serial.println("=== ESP32 iniciou ===");
+  Serial.println("[1] Chamando controller.begin()...");
+
   if (!controller.begin()) {
-    Serial.println(
-      "Erro: nao foi possivel inicializar o controle."
-    );
+    Serial.println("[ERRO] Nao foi possivel inicializar o controle.");
 
     for (;;) {
       delay(1000);
     }
   }
 
-  Serial.println("Controle inicializado com sucesso.");
+  Serial.println("[OK] Controle inicializado com sucesso.");
 }
 
 void loop() {
-  if (ENABLE_SERIAL_DEBUG) {
-    GamepadReport report;
-
-    if (controller.readLatestReport(report)) {
-      Serial.printf(
-        "J1: X=%4d Y=%4d | "
-        "J2: X=%4d Y=%4d | "
-        "Botoes: 0x%04X\n",
-        report.joystick1X,
-        report.joystick1Y,
-        report.joystick2X,
-        report.joystick2Y,
-        report.buttons
-      );
-    }
-  }
-
+  // Main loop idle: communications task handles serial I/O and printing.
   vTaskDelay(
     pdMS_TO_TICKS(DEBUG_PERIOD_MS)
   );
