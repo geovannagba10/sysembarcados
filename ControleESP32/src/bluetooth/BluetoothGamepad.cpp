@@ -58,6 +58,13 @@ void BluetoothGamepad::begin() {
   configuration.setMotionMin(-32767);
   configuration.setMotionMax(32767);
 
+  /*
+   * Um byte de Output Report para o rumble remoto:
+   * 0 desliga; 1..255 ajustam a intensidade.
+   */
+  configuration.setEnableOutputReport(true);
+  configuration.setOutputReportLength(OUTPUT_REPORT_LENGTH);
+
   bleGamepad.begin(&configuration);
 }
 
@@ -123,6 +130,15 @@ void BluetoothGamepad::sendReport(
 bool BluetoothGamepad::readRumbleIntensity(
   uint8_t &intensity
 ) {
-  (void)intensity;
+  if (bleGamepad.isOutputReceived()) {
+    uint8_t *outputBuffer =
+      bleGamepad.getOutputBuffer();
+
+    if (outputBuffer != nullptr) {
+      intensity = outputBuffer[0];
+      return true;
+    }
+  }
+
   return false;
 }

@@ -73,6 +73,19 @@ void GamepadController::runCommTask() {
       bluetoothGamepad.sendReport(report);
     }
 
+    uint8_t rumbleIntensity = 0;
+
+    if (
+      connected &&
+      bluetoothGamepad.readRumbleIntensity(rumbleIntensity)
+    ) {
+      setVibrationIntensity(rumbleIntensity);
+      Serial.printf(
+        "[BLE] Rumble recebido: %u\n",
+        rumbleIntensity
+      );
+    }
+
     TickType_t currentTime =
       xTaskGetTickCount();
 
@@ -222,7 +235,6 @@ bool GamepadController::begin() {
     return false;
   }
 
-  Serial.println("[DEBUG] Inicializando Bluetooth...");
   bluetoothGamepad.begin();
   bluetoothReady = true;
 

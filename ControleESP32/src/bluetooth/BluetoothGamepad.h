@@ -15,6 +15,8 @@
  */
 class BluetoothGamepad {
   private:
+    static constexpr uint8_t OUTPUT_REPORT_LENGTH = 1;
+
     BleGamepad bleGamepad;
     BleGamepadConfiguration configuration;
 
@@ -41,5 +43,10 @@ class BluetoothGamepad {
      */
     void sendReport(const GamepadReport &report);
 
+    /**
+     * Lê a intensidade de rumble enviada pelo host via Output Report.
+     *
+     * 0 desliga o motor; 1..255 ajustam a intensidade PWM.
+     */
     bool readRumbleIntensity(uint8_t &intensity);
 };
