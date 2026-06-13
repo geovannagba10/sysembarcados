@@ -35,9 +35,10 @@ BUTTON_MASK_4 = 0x08
 
 JOYSTICK_MAX = 127.0
 TRIGGER_MAX = 255
-STEERING_DEADZONE = 0.08
+STEERING_DEADZONE = 0.18
 PEDAL_DEADZONE = 0.10
-MAX_ROLL_RADIANS = math.radians(35.0)
+MAX_ROLL_RADIANS = math.radians(55.0)
+RUMBLE_CHANGE_THRESHOLD = 8
 
 
 def describe_device(device):
@@ -153,6 +154,13 @@ def compute_roll_fraction(accel_x, accel_z):
     return clamp(roll_radians / MAX_ROLL_RADIANS, -1.0, 1.0)
 
 
+def smooth_value(previous_value, current_value, alpha):
+    return (
+        (alpha * current_value) +
+        ((1.0 - alpha) * previous_value)
+    )
+
+
 class Esp32XInputBridge:
     def __init__(self, mode):
         self.mode = mode
@@ -165,6 +173,7 @@ class Esp32XInputBridge:
         self.last_rumble_value = None
         self.last_input_timestamp = 0.0
         self.last_drive_debug = None
+        self.filtered_steering_fraction = 0.0
 
     def open(self):
         self.device = find_target_device()
@@ -209,7 +218,19 @@ class Esp32XInputBridge:
     def close(self):
         self.running = False
 
+        self.send_rumble_to_esp32(0, force=True)
+
         if self.virtual_gamepad is not None:
+            try:
+                self.virtual_gamepad.right_trigger(value=0)
+                self.virtual_gamepad.left_trigger(value=0)
+                self.virtual_gamepad.left_joystick(x_value=0, y_value=0)
+                self.virtual_gamepad.right_joystick(x_value=0, y_value=0)
+                self.virtual_gamepad.reset()
+                self.virtual_gamepad.update()
+            except Exception:
+                pass
+
             try:
                 self.virtual_gamepad.unregister_notification()
             except Exception:
@@ -314,12 +335,17 @@ class Esp32XInputBridge:
         y16 = scale_axis_8_to_16(joystick_y)
 
         if self.mode == "racing":
-            steering_fraction = apply_deadzone(
+            raw_steering_fraction = apply_deadzone(
                 compute_roll_fraction(accel_x, accel_z),
                 STEERING_DEADZONE,
             )
+            self.filtered_steering_fraction = smooth_value(
+                self.filtered_steering_fraction,
+                raw_steering_fraction,
+                0.18,
+            )
             steering_value = scale_fraction_to_stick(
-                steering_fraction
+                self.filtered_steering_fraction
             )
 
             self.virtual_gamepad.left_joystick(
@@ -431,26 +457,39 @@ class Esp32XInputBridge:
             int(small_motor)
         )
 
-        if rumble_value == self.last_rumble_value:
+        if (
+            self.last_rumble_value is not None and
+            abs(rumble_value - self.last_rumble_value) <
+            RUMBLE_CHANGE_THRESHOLD
+        ):
             return
 
-        self.last_rumble_value = rumble_value
         self.send_rumble_to_esp32(rumble_value)
 
-    def send_rumble_to_esp32(self, intensity):
+    def send_rumble_to_esp32(self, intensity, force=False):
         if self.output_report is None or self.output_report_length is None:
+            return
+
+        intensity = clamp(intensity, 0, 255)
+
+        if (
+            not force and
+            self.last_rumble_value is not None and
+            abs(intensity - self.last_rumble_value) < RUMBLE_CHANGE_THRESHOLD
+        ):
             return
 
         raw_data = [0] * self.output_report_length
 
         if self.output_report_length > 1:
-            raw_data[1] = clamp(intensity, 0, 255)
+            raw_data[1] = intensity
         else:
-            raw_data[0] = clamp(intensity, 0, 255)
+            raw_data[0] = intensity
 
         try:
             self.output_report.set_raw_data(raw_data)
             self.output_report.send()
+            self.last_rumble_value = intensity
             print(f"Rumble enviado ao ESP32: {intensity}")
         except Exception as error:
             print(f"Falha ao enviar rumble ao ESP32: {error}")
