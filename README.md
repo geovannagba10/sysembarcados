@@ -108,5 +108,8 @@ py ControleESP32\tools\bridge_xinput.py --mode racing
 
 No modo `racing`:
 
-- eixo X do joystick controla a direcao
-- eixo Y do joystick vira acelerador/freio
+- IMU controla a direcao
+- joystick Y vira acelerador/freio analogico
+- botao 1 tambem acelera no maximo
+- botao 2 tambem freia no maximo
+- rumble do jogo volta para o ESP32 pela ponte

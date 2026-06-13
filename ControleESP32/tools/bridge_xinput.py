@@ -1,4 +1,5 @@
 import argparse
+import math
 import signal
 import sys
 import threading
@@ -31,6 +32,12 @@ BUTTON_MASK_1 = 0x01
 BUTTON_MASK_2 = 0x02
 BUTTON_MASK_3 = 0x04
 BUTTON_MASK_4 = 0x08
+
+JOYSTICK_MAX = 127.0
+TRIGGER_MAX = 255
+STEERING_DEADZONE = 0.08
+PEDAL_DEADZONE = 0.10
+MAX_ROLL_RADIANS = math.radians(35.0)
 
 
 def describe_device(device):
@@ -116,6 +123,36 @@ def scale_axis_8_to_16(value):
     return clamp(scaled, -32768, 32767)
 
 
+def normalize_axis_8(value):
+    return clamp(value / JOYSTICK_MAX, -1.0, 1.0)
+
+
+def apply_deadzone(value, deadzone):
+    magnitude = abs(value)
+
+    if magnitude <= deadzone:
+        return 0.0
+
+    scaled = (magnitude - deadzone) / (1.0 - deadzone)
+    return math.copysign(clamp(scaled, 0.0, 1.0), value)
+
+
+def scale_fraction_to_trigger(value):
+    return int(clamp(value, 0.0, 1.0) * TRIGGER_MAX)
+
+
+def scale_fraction_to_stick(value):
+    return int(clamp(value, -1.0, 1.0) * 32767)
+
+
+def compute_roll_fraction(accel_x, accel_z):
+    if accel_x == 0 and accel_z == 0:
+        return 0.0
+
+    roll_radians = math.atan2(float(accel_x), float(-accel_z))
+    return clamp(roll_radians / MAX_ROLL_RADIANS, -1.0, 1.0)
+
+
 class Esp32XInputBridge:
     def __init__(self, mode):
         self.mode = mode
@@ -186,6 +223,12 @@ class Esp32XInputBridge:
         try:
             print("Ponte iniciada.")
             print(f"Modo atual: {self.mode}")
+            if self.mode == "racing":
+                print(
+                    "Racing: IMU controla direcao; "
+                    "Botao 1 acelera; Botao 2 freia; "
+                    "joystick Y tambem atua como pedal analogico."
+                )
             print("Pressione Ctrl+C para encerrar.")
 
             while self.running:
@@ -219,36 +262,92 @@ class Esp32XInputBridge:
         buttons = data[1]
         joystick_x = int16_from_le(data, 2)
         joystick_y = int16_from_le(data, 4)
+        gyro_x = 0
+        gyro_y = 0
+        gyro_z = 0
+        accel_x = 0
+        accel_y = 0
+        accel_z = 0
+
+        if len(data) >= 18:
+            gyro_x = int16_from_le(data, 6)
+            gyro_y = int16_from_le(data, 8)
+            gyro_z = int16_from_le(data, 10)
+            accel_x = int16_from_le(data, 12)
+            accel_y = int16_from_le(data, 14)
+            accel_z = int16_from_le(data, 16)
 
         with self.lock:
             self.apply_input_mapping(
                 buttons=buttons,
                 joystick_x=joystick_x,
                 joystick_y=joystick_y,
+                gyro_x=gyro_x,
+                gyro_y=gyro_y,
+                gyro_z=gyro_z,
+                accel_x=accel_x,
+                accel_y=accel_y,
+                accel_z=accel_z,
             )
 
-    def apply_input_mapping(self, buttons, joystick_x, joystick_y):
+    def apply_input_mapping(
+        self,
+        buttons,
+        joystick_x,
+        joystick_y,
+        gyro_x,
+        gyro_y,
+        gyro_z,
+        accel_x,
+        accel_y,
+        accel_z,
+    ):
+        del gyro_x
+        del gyro_y
+        del gyro_z
+        del accel_y
+
         self.virtual_gamepad.reset()
 
         x16 = scale_axis_8_to_16(joystick_x)
         y16 = scale_axis_8_to_16(joystick_y)
 
         if self.mode == "racing":
+            steering_fraction = apply_deadzone(
+                compute_roll_fraction(accel_x, accel_z),
+                STEERING_DEADZONE,
+            )
+            steering_value = scale_fraction_to_stick(
+                steering_fraction
+            )
+
             self.virtual_gamepad.left_joystick(
-                x_value=x16,
+                x_value=steering_value,
                 y_value=0
             )
 
-            if joystick_y < 0:
-                throttle = int(
-                    clamp((-joystick_y / 127.0) * 255, 0, 255)
+            pedal_fraction = apply_deadzone(
+                normalize_axis_8(joystick_y),
+                PEDAL_DEADZONE,
+            )
+
+            throttle = 0
+            brake = 0
+
+            if pedal_fraction > 0:
+                throttle = scale_fraction_to_trigger(
+                    pedal_fraction
                 )
-                brake = 0
-            else:
-                throttle = 0
-                brake = int(
-                    clamp((joystick_y / 127.0) * 255, 0, 255)
+            elif pedal_fraction < 0:
+                brake = scale_fraction_to_trigger(
+                    -pedal_fraction
                 )
+
+            if buttons & BUTTON_MASK_1:
+                throttle = TRIGGER_MAX
+
+            if buttons & BUTTON_MASK_2:
+                brake = TRIGGER_MAX
 
             self.virtual_gamepad.right_trigger(value=throttle)
             self.virtual_gamepad.left_trigger(value=brake)
@@ -337,7 +436,8 @@ def parse_args():
         default="gamepad",
         help=(
             "gamepad: mapeia o joystick do ESP32 para o stick esquerdo. "
-            "racing: usa X para direcao e Y para acelerador/freio."
+            "racing: usa IMU para direcao e joystick Y para "
+            "acelerador/freio."
         ),
     )
     return parser.parse_args()
