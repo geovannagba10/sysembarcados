@@ -164,6 +164,7 @@ class Esp32XInputBridge:
         self.lock = threading.Lock()
         self.last_rumble_value = None
         self.last_input_timestamp = 0.0
+        self.last_drive_debug = None
 
     def open(self):
         self.device = find_target_device()
@@ -351,6 +352,38 @@ class Esp32XInputBridge:
 
             self.virtual_gamepad.right_trigger(value=throttle)
             self.virtual_gamepad.left_trigger(value=brake)
+
+            # Espelho de compatibilidade:
+            # alguns jogos aceitam melhor aceleracao/freio quando
+            # o mesmo comando tambem aparece em eixos/botoes extras
+            # do controle XInput virtual.
+            pedal_stick = scale_fraction_to_stick(
+                clamp((throttle - brake) / float(TRIGGER_MAX), -1.0, 1.0)
+            )
+            self.virtual_gamepad.right_joystick(
+                x_value=0,
+                y_value=-pedal_stick
+            )
+
+            if throttle > 0:
+                self.virtual_gamepad.press_button(
+                    button=vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER
+                )
+
+            if brake > 0:
+                self.virtual_gamepad.press_button(
+                    button=vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER
+                )
+
+            drive_debug = (steering_value, throttle, brake)
+            if drive_debug != self.last_drive_debug:
+                self.last_drive_debug = drive_debug
+                print(
+                    "Racing | steer="
+                    f"{steering_value:6d} "
+                    f"throttle={throttle:3d} "
+                    f"brake={brake:3d}"
+                )
         else:
             self.virtual_gamepad.left_joystick(
                 x_value=x16,
