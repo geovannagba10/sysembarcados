@@ -74,3 +74,39 @@ O script procura o controle HID exposto no Windows e envia:
 - intensidade `255`
 - espera `2` segundos
 - intensidade `0`
+
+## Ponte para jogos comerciais
+
+Para jogos que nao reconhecem bem o HID generico do ESP32, existe uma
+ponte no PC:
+
+- `ControleESP32/tools/bridge_xinput.py`
+
+Ela faz:
+
+- leitura do `ESP32 Gamepad` via HID no Windows
+- criacao de um controle virtual Xbox 360 via `vgamepad`
+- envio do rumble do jogo de volta para o ESP32
+
+Dependencias:
+
+```bash
+py -m pip install pywinusb vgamepad
+```
+
+Execucao:
+
+```bash
+py ControleESP32\tools\bridge_xinput.py
+```
+
+Modo para jogos de corrida:
+
+```bash
+py ControleESP32\tools\bridge_xinput.py --mode racing
+```
+
+No modo `racing`:
+
+- eixo X do joystick controla a direcao
+- eixo Y do joystick vira acelerador/freio
